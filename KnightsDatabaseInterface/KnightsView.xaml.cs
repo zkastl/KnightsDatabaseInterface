@@ -24,5 +24,17 @@ namespace KnightsDatabaseInterface
         {
             InitializeComponent();
         }
+
+        private Knight TestKnight = new Knight()
+        {
+            FirstName = "Zak",
+            LastName = "Anton",
+            Address = "128 Fate St.",
+            City = "Yukon",
+            ZipCode = "73099",
+            EmailAddress = "zak@zetacorp.com",
+            Council = "6478",
+            Roles = new string[] { "State Warden", "State Roundtable Chair" }
+        };
     }
 }

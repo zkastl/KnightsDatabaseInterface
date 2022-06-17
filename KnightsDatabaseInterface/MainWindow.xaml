@@ -8,7 +8,9 @@
         Title="MainWindow" Height="450" Width="800">
     <Grid>
         <TabPanel>
-            <TabItem MinWidth="50" Header="Knights" />
+            <TabItem MinWidth="50" Header="Knights">
+                <local:KnightsView />
+            </TabItem>
             <TabItem MinWidth="50" Header="Councils"/>
             <TabItem MinWidth="50" Header="State Leadership" />
         </TabPanel>
