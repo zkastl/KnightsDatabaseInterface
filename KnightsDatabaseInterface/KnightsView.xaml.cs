@@ -12,6 +12,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using Microsoft.Data.Sqlite;
+using FilePath = System.IO.Path;   
 
 namespace KnightsDatabaseInterface
 {
@@ -20,15 +22,38 @@ namespace KnightsDatabaseInterface
     /// </summary>
     public partial class KnightsView : UserControl
     {
+        private string dbFileName = "ok_knights_directory.db";
         public KnightsView()
         {
             InitializeComponent();
+            testBox.Text = TestKnight.FirstName + " " + TestKnight.LastName;
+            string test = Environment.CurrentDirectory;
+            string test2 = FilePath.Combine(test, dbFileName);
+
+            using (var connection = new SqliteConnection(dbFileName))
+            {
+                connection.Open();
+                var command = connection.CreateCommand();
+                command.CommandText =
+                    @"
+                        SELECT firstName from knights
+                    ";
+
+                using(var reader = command.ExecuteReader())
+                {
+                    while(reader.Read())
+                    {
+                        TestKnight.FirstName = reader.GetString(0);
+                    }
+                }
+            }
         }
 
-        private Knight TestKnight = new Knight()
+        private Knight TestKnight = new()
         {
             FirstName = "Zak",
-            LastName = "Anton",
+            MiddleName = "Anton",
+            LastName = "Kastl",
             Address = "128 Fate St.",
             City = "Yukon",
             ZipCode = "73099",
