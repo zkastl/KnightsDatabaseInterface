@@ -22,7 +22,7 @@ namespace KnightsDatabaseInterface
     /// </summary>
     public partial class KnightsView : UserControl
     {
-        private string dbFileName = "ok_knights_directory.db";
+        private string dbFileName = "Data Source=ok_knights_directory.db";
         public KnightsView()
         {
             InitializeComponent();
@@ -36,15 +36,17 @@ namespace KnightsDatabaseInterface
                 var command = connection.CreateCommand();
                 command.CommandText =
                     @"
-                        SELECT firstName from knights
+                        SELECT * from knights
                     ";
 
                 using(var reader = command.ExecuteReader())
                 {
+                    var names = new List<string>();
                     while(reader.Read())
                     {
-                        TestKnight.FirstName = reader.GetString(0);
+                        names.Add(reader.GetString(0));
                     }
+                    testBox.Text = names.First() + " " + TestKnight.LastName;
                 }
             }
         }
