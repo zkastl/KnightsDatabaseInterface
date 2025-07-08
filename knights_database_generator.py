@@ -17,6 +17,7 @@ import os
 
 from docx import Document
 from docx.shared import Inches, Pt
+from docx.enum.section import WD_ORIENTATION
 from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
@@ -91,15 +92,14 @@ class KnightsWordGenerator:
         table.columns[1].width = Inches(DEFAULT_CELL_WIDTH + 0.5)
         table.columns[2].width = Inches(DEFAULT_CELL_WIDTH - 0.75)
         table.columns[3].width = Inches(DEFAULT_CELL_WIDTH - 0.25)
-        table.rows[0].height = Inches(DEFAULT_CELL_HEIGHT)
-        table.rows[0].height = Inches(DEFAULT_CELL_HEIGHT)
-        table.rows[0].height = Inches(DEFAULT_CELL_HEIGHT)
-        table.rows[0].height = Inches(DEFAULT_CELL_HEIGHT)
+        # table.rows[0].height = Inches(DEFAULT_CELL_HEIGHT)
+        # table.rows[1].height = Inches(DEFAULT_CELL_HEIGHT)
+        # table.rows[2].height = Inches(DEFAULT_CELL_HEIGHT)
+        # table.rows[3].height = Inches(DEFAULT_CELL_HEIGHT)
         ######
         
         # First Row: Officer Title
         row1 = table.rows[0]
-        row1.height = Inches(0.25)
 
         cell = row1.cells[0]
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
@@ -204,7 +204,7 @@ class KnightsWordGenerator:
                     'phone': self._format_phone(row[4]),
                     'email': row[5] or '[Email Not Available]',
                     'council': str(row[6]) or '[Council Not Available]',
-                    'role': row[7] or '[Role Not Available]'
+                    'role': row[8] or '[Role Not Available]'
                 }
                 officers.append(officer)
             
@@ -215,12 +215,59 @@ class KnightsWordGenerator:
             print(f"Database error: {e}")
             return self.get_sample_data()
     
+    def create_dd_table(self, district_deputy):
+        """
+        """
+
+        # Create the table
+        table = self.doc.add_table(rows=1, cols=5)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        row = table.rows[0]
+
+        # First Column: District Number
+        cell = row.cells[0]
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        cell.width = Inches(1)
+        paragraph = cell.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        role_run = paragraph.add_run(district_deputy['number'])
+        role_run.font.bold = True
+
+        # Second Column: Name/Address/City-State-Zip
+        cell = row.cells[1]
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        paragraph = cell.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.add_run(district_deputy['district_deputy'])
+        cell.add_paragraph(district_deputy['address'])
+        cell.add_paragraph(district_deputy['city_state_zip'])
+
+        cell = row.cells[2]
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        paragraph = cell.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        #paragraph.add_run(district_deputy['wife'])
+        cell.add_paragraph('')
+        cell.add_paragraph(district_deputy['email'])
+
+        cell = row.cells[3]
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+        paragraph = cell.paragraphs[0]
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.add_run(district_deputy['phone'])
+
+        for council in district_deputy['councils']:
+            cell.add_paragraph(council)
+
+        self.doc.add_paragraph()
+    
     def _get_dd_data(self):
         """
         Query the database to get state officers information
         
         Returns:
-            list: List of dictionaries containing officer data
+            list: Returns a list of dictionaries of officer data
         """
         if not os.path.exists(self.db_path):
             print(f"Database file not found: {self.db_path}")
@@ -232,7 +279,7 @@ class KnightsWordGenerator:
             
             # Query to get state officers with full information
             query = """
-            SELECT * from "DistrictDeputyView"
+            SELECT * from "DistrictsView"
             """
             
             cursor.execute(query)
@@ -240,16 +287,19 @@ class KnightsWordGenerator:
             
             dds = []
             for row in rows:
+                address = row[2].split('|') if row[2] is not None else ['null','null','null','null']
+                councils = row[6].split('|')
+
                 dd = {
-                    'district_number': row[0] or '[ERROR]',
-                    'dd_name': row[1] or '[VACANT]',
-                    'address': row[2] or '',
-                    'city_state': row[3] or '',
-                    'zip': row[4] or '',
-                    'wife': row[5] or '',
-                    'email': row[6] or '[email not available]',
-                    'phone': self._format_phone(row[7]),
-                    'councils': str(row[6]) or '[Council Not Available]',
+                    'number': str(row[0]) or '[ERROR]',
+                    'district_deputy': row[1] or '[VACANT]',
+                    'address': address[0] or '',
+                    'city_state_zip': address[1] + ', ' + address[2] + ' ' + address[3],
+                    'phone': self._format_phone(row[3]) or '',
+                    'email': row[4] or '',
+                    'home_council': str(row[5]) or '',
+                    'councils': councils,
+                    #'wife': row[7]
                 }
                 dds.append(dd)
             
@@ -318,11 +368,18 @@ class KnightsWordGenerator:
 
     def generate_dd_section(self):
 
+        print("Generating District Deputy Section")
+        dds = self._get_dd_data()
+        if not dds:
+            print('DD DATA NOT FOUND...SKIPPING SECTION...')
+            return
+        
         self.add_section_header("District Deputies")
-        # dds = self._get_dd_data()
+        self.doc.sections[-1].orientation = WD_ORIENTATION.LANDSCAPE
 
-        # for dd in enumerate(dds):
-        #     print('butts')
+        ## Create table for each DD
+        for _, dd in enumerate(dds):
+            self.create_dd_table(dd)
     
     def generate_document(self, output_filename="OK_Knights_StateOfficers.docx"):
         """
