@@ -1,183 +1,237 @@
 #!/usr/bin/env python3
 """
-Knights of Columbus State Officers Word Document Generator
+Enhanced Knights of Columbus Directory Generator
 
-This script reads from the Oklahoma Knights directory SQLite database
-and generates a Word document with properly formatted officer tables.
+This script generates both Word and PDF documents from the Oklahoma Knights directory database.
+Features improved table formatting and direct PDF generation.
 
 Required packages:
-pip install python-docx sqlite3
+pip install reportlab sqlite3 pillow
 
 Usage:
-python knights_word_generator.py
+python knights_enhanced_generator.py
+python knights_enhanced_generator.py --database /path/to/db.db
 """
 
 import sqlite3
 import os
+import argparse
+from datetime import datetime
 
-from docx import Document
-from docx.shared import Inches, Pt
-from docx.enum.section import WD_ORIENTATION
-from docx.enum.section import WD_SECTION
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
-# from docx.oxml.ns import nsdecls
-# from docx.oxml import parse_xml
+# PDF imports
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
-class KnightsWordGenerator:
-    def __init__(self, db_path="ok_knights_directory.db"):
+class KnightsDirectoryGenerator:
+    def __init__(self, db_path="ok_knights_directory.db", image_path="knights_logo.jpg"):
         self.db_path = db_path
-        self.doc = Document()
-        self.setup_document_styles()
+        self.image_path = image_path
+        self.pdf_story = []
+        self.pdf_styles = getSampleStyleSheet()
+        self.setup_pdf_styles()
 
-    def setup_document_styles(self):
-        """Configure document-wide styles"""
-
-        # Set margins
-        sections = self.doc.sections
-        for section in sections:
-            section.top_margin = Inches(1)
-            section.bottom_margin = Inches(1)
-            section.left_margin = Inches(1)
-            section.right_margin = Inches(1)
-
-    def add_topmatter(self):
-        """Add the top matter to the document"""
-
-        self.doc.add_section(WD_SECTION.CONTINUOUS)
-        self.doc.add_heading("Oklahoma Knights of Columbus State Directory", 0)
-
-    def add_section_header(self, section_title: str):
-        """
-        Adds a new section to the document;
-        this is the masterclass for all different sections
-        """
-        self.doc.add_section(WD_SECTION.CONTINUOUS)
-        heading = self.doc.add_heading(section_title, 1)
-        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        heading.runs[-1].font.size = Pt(20)
-    
-    # def set_cell_color(self, cell, color_hex):
-    #     """Set background color for a table cell"""
-    #     shading_elm = parse_xml(
-    #         f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'
-    #     )
-    #     cell._tc.get_or_add_tcPr().append(shading_elm)
-
-    def create_officer_table(self, officer_data):
-        """
-        Create a table for a single officer
-        """
+    def setup_pdf_styles(self):
+        """Setup custom PDF styles"""
+        # Title style - larger for title page
+        self.pdf_styles.add(ParagraphStyle(
+            name='CustomTitle',
+            parent=self.pdf_styles['Title'],
+            fontSize=28,
+            spaceAfter=40,
+            spaceBefore=60,
+            alignment=TA_CENTER,
+            textColor=colors.darkblue,
+            fontName='Helvetica-Bold'
+        ))
         
-        # Create the table
-        table = self.doc.add_table(rows=4, cols=4)
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        #table.style = 'Table Grid'
-
-        # Set the table width
-        # ALERT!!!
-        # Ok, so according to stackoverflow, this section of code
-        # seems to be ignored by Word, but works in other open office
-        # implementations such as google docs. In Word, the column width
-        # property is ignored for cell widths.
-
-        # I might try to update this later, but for now, do final
-        # rendering of the document in google docs so it looks right.
-        table.autofit = False
-        DEFAULT_CELL_WIDTH = 1.625
-        DEFAULT_CELL_HEIGHT = 0.125
-        AFTER_PARAGRAPH_SPACE = Pt(1)
-
-        table.columns[0].width = Inches(DEFAULT_CELL_WIDTH + 0.5)
-        table.columns[1].width = Inches(DEFAULT_CELL_WIDTH + 0.5)
-        table.columns[2].width = Inches(DEFAULT_CELL_WIDTH - 0.75)
-        table.columns[3].width = Inches(DEFAULT_CELL_WIDTH - 0.25)
-        # table.rows[0].height = Inches(DEFAULT_CELL_HEIGHT)
-        # table.rows[1].height = Inches(DEFAULT_CELL_HEIGHT)
-        # table.rows[2].height = Inches(DEFAULT_CELL_HEIGHT)
-        # table.rows[3].height = Inches(DEFAULT_CELL_HEIGHT)
-        ######
+        # Subtitle style for title page
+        self.pdf_styles.add(ParagraphStyle(
+            name='SubTitle',
+            parent=self.pdf_styles['Normal'],
+            fontSize=16,
+            spaceAfter=30,
+            spaceBefore=20,
+            alignment=TA_CENTER,
+            textColor=colors.darkblue,
+            fontName='Helvetica'
+        ))
         
-        # First Row: Officer Title
-        row1 = table.rows[0]
-
-        cell = row1.cells[0]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        role_run = paragraph.add_run(officer_data['role'])
-        role_run.font.bold = True
-        role_run.font.size = Pt(12)
-
-        # Second Row: Name, Wife, Council, Primary #
-        row2 = table.rows[1]
-
-        cell = row2.cells[0]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        paragraph.add_run(officer_data['full_name'])
-
-        cell = row2.cells[1]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        paragraph.add_run(officer_data['wife'])
-
-        cell = row2.cells[2]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        paragraph.add_run(officer_data['council'])
-
-        cell = row2.cells[3]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        paragraph.add_run(officer_data['phone'])
-
-        # Third Row: Address
-        row3 = table.rows[2]
-
-        cell = row3.cells[0]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        paragraph.add_run(officer_data['address'])
+        # Section header style
+        self.pdf_styles.add(ParagraphStyle(
+            name='SectionHeader',
+            parent=self.pdf_styles['Heading1'],
+            fontSize=18,
+            spaceAfter=10,
+            spaceBefore=0,
+            alignment=TA_CENTER,
+            textColor=colors.darkblue
+        ))
         
-        # 4th Row: City/State/Zip, email, ??
-        row4 = table.rows[3]
+        # Officer role style
+        self.pdf_styles.add(ParagraphStyle(
+            name='OfficerRole',
+            parent=self.pdf_styles['Normal'],
+            fontSize=12,
+            alignment=TA_LEFT,
+            textColor=colors.black,
+            fontName='Helvetica-Bold'
+        ))
 
-        cell = row4.cells[0]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        paragraph.add_run(officer_data['city_state_zip'])
+        # Center style
+        self.pdf_styles.add(ParagraphStyle(
+            name='CenterNormal',
+            parent=self.pdf_styles['Normal'],
+            alignment=TA_CENTER
+        ))
 
-        cell = row4.cells[1]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = AFTER_PARAGRAPH_SPACE
-        paragraph.add_run(officer_data['email'])
+        # Right style
+        self.pdf_styles.add(ParagraphStyle(
+            name='RightNormal',
+            parent=self.pdf_styles['Normal'],
+            alignment=TA_RIGHT
+        ))
 
-        # Add spacing after the table
-        self.doc.add_paragraph()
-    
+    def create_title_page(self):
+        """Create a full title page with image"""
+        title_elements = []
+        
+        # Add main title
+        title_elements.append(Paragraph("Oklahoma Knights of Columbus", self.pdf_styles['CustomTitle']))
+        title_elements.append(Paragraph("State Directory", self.pdf_styles['CustomTitle']))
+        
+        # Add image if it exists
+        if os.path.exists(self.image_path):
+            try:
+                # Create image - adjust size as needed
+                img = Image(self.image_path)
+                
+                # Scale image to fit nicely on page (max 4 inches wide or high)
+                img_width, img_height = img.drawWidth, img.drawHeight
+                max_size = 4 * inch
+                
+                if img_width > max_size or img_height > max_size:
+                    if img_width > img_height:
+                        # Landscape image - scale by width
+                        scale_factor = max_size / img_width
+                    else:
+                        # Portrait image - scale by height
+                        scale_factor = max_size / img_height
+                    
+                    img.drawWidth = img_width * scale_factor
+                    img.drawHeight = img_height * scale_factor
+                
+                title_elements.append(Spacer(1, 30))
+                title_elements.append(img)
+                title_elements.append(Spacer(1, 30))
+                print(f"Added image: {self.image_path}")
+                
+            except Exception as e:
+                print(f"Warning: Could not load image {self.image_path}: {e}")
+                title_elements.append(Spacer(1, 60))
+        else:
+            print(f"Image file not found: {self.image_path}")
+            title_elements.append(Spacer(1, 60))
+        
+        # Add current year
+        current_year = datetime.now().year
+        title_elements.append(Paragraph(f"{current_year}", self.pdf_styles['SubTitle']))
+        
+        # Add some additional spacing to center content
+        title_elements.append(Spacer(1, 100))
+        
+        # Add page break after title page
+        title_elements.append(PageBreak())
+        
+        return title_elements
+
+    def create_pdf_officer_table(self, officer_data):
+        """Create a PDF table for officers"""
+        data = [
+            # Row 1: Role (spanning all columns)
+            [
+                Paragraph(officer_data['role'], self.pdf_styles['OfficerRole'])
+            ],
+            # Row 2: Details
+            [
+                Paragraph(officer_data['full_name'], self.pdf_styles['Normal']),
+                Paragraph(officer_data['wife'], self.pdf_styles['Normal']),
+                Paragraph(officer_data['council'], self.pdf_styles['Normal']),
+                Paragraph(officer_data['phone'], self.pdf_styles['RightNormal'])
+            ],
+            # Row 3: Address
+            [
+                Paragraph(officer_data['address'], self.pdf_styles['Normal']),
+                '', '', ''
+            ],
+            # Row 4: City/State/Zip and Email
+            [
+                Paragraph(officer_data['city_state_zip'], self.pdf_styles['Normal']),
+                '',
+                Paragraph(officer_data['email'], self.pdf_styles['RightNormal']),
+                ''
+            ]
+        ]
+        
+        table = Table(data, 
+                      colWidths=[2.2*inch, 1.0*inch, 1.0*inch, 1.8*inch],
+                      rowHeights=[0.3*inch, 0.175*inch, 0.175*inch, 0.175*inch])
+        
+        # Table styling (no borders)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 5),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('SPAN', (0, 0), (-1, 0)),  # Span role across all columns
+            ('SPAN', (0, 2), (1, 2)),   # Span address across 2 columns
+            ('SPAN', (0, 3), (1, 3)),   # Span city/state/zip across 2 columns
+            ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        return table
+
+    def create_pdf_dd_table(self, dd_data):
+        """Create a PDF table for district deputies (portrait format)"""
+        councils_text = '\n'.join(dd_data['councils'])
+        
+        data = [
+            [
+                Paragraph(f"<b>District {dd_data['number']}</b>", self.pdf_styles['Normal']),
+                Paragraph(f"{dd_data['district_deputy']}<br/>{dd_data['address']}<br/>{dd_data['city_state_zip']}", self.pdf_styles['Normal']),
+                Paragraph(dd_data['email'], self.pdf_styles['Normal']),
+                Paragraph(dd_data['phone'], self.pdf_styles['Normal']),
+                Paragraph(councils_text, self.pdf_styles['Normal'])
+            ]
+        ]
+        
+        # Portrait-friendly column widths
+        table = Table(data, colWidths=[1*inch, 2.5*inch, 2*inch, 1.5*inch, 1.5*inch])
+        
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
+        ]))
+        
+        return table
+
     def _get_state_officers_data(self):
-        """
-        Query the database to get state officers information
-        
-        Returns:
-            list: List of dictionaries containing officer data
-        """
+        """Query database for state officers"""
         if not os.path.exists(self.db_path):
             print(f"Database file not found: {self.db_path}")
             return self.get_sample_data()
@@ -186,25 +240,21 @@ class KnightsWordGenerator:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Query to get state officers with full information
-            query = """
-            SELECT * from "StateOfficerView"
-            """
-            
+            query = "SELECT * FROM StateOfficerView"
             cursor.execute(query)
             rows = cursor.fetchall()
             
             officers = []
             for row in rows:
                 officer = {
-                    'full_name': row[0] or '[Name Not Available]',
+                    'full_name': row[0] or '[ERROR]',
                     'wife': row[1] or '',
-                    'address': row[2] or '[Address Not Available]',
-                    'city_state_zip': row[3] or '[City Not Available]',
+                    'address': row[2] or '[NO DATA]',
+                    'city_state_zip': row[3] or '[NO DATA]',
                     'phone': self._format_phone(row[4]),
-                    'email': row[5] or '[Email Not Available]',
-                    'council': str(row[6]) or '[Council Not Available]',
-                    'role': row[8] or '[Role Not Available]'
+                    'email': row[5] or '[NO DATA]',
+                    'council': f"{row[6]}" if row[6] else '[NO DATA]',
+                    'role': row[8] or '[ERROR]'
                 }
                 officers.append(officer)
             
@@ -214,92 +264,39 @@ class KnightsWordGenerator:
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return self.get_sample_data()
-    
-    def create_dd_table(self, district_deputy):
-        """
-        """
 
-        # Create the table
-        table = self.doc.add_table(rows=1, cols=5)
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-
-        row = table.rows[0]
-
-        # First Column: District Number
-        cell = row.cells[0]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        cell.width = Inches(1)
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        role_run = paragraph.add_run(district_deputy['number'])
-        role_run.font.bold = True
-
-        # Second Column: Name/Address/City-State-Zip
-        cell = row.cells[1]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.add_run(district_deputy['district_deputy'])
-        cell.add_paragraph(district_deputy['address'])
-        cell.add_paragraph(district_deputy['city_state_zip'])
-
-        cell = row.cells[2]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        #paragraph.add_run(district_deputy['wife'])
-        cell.add_paragraph('')
-        cell.add_paragraph(district_deputy['email'])
-
-        cell = row.cells[3]
-        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-        paragraph = cell.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.add_run(district_deputy['phone'])
-
-        for council in district_deputy['councils']:
-            cell.add_paragraph(council)
-
-        self.doc.add_paragraph()
-    
     def _get_dd_data(self):
-        """
-        Query the database to get state officers information
-        
-        Returns:
-            list: Returns a list of dictionaries of officer data
-        """
+        """Query database for district deputies"""
         if not os.path.exists(self.db_path):
             print(f"Database file not found: {self.db_path}")
-            return self.get_sample_data()
+            return []
         
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Query to get state officers with full information
-            query = """
-            SELECT * from "DistrictsView"
-            """
-            
+            query = "SELECT * FROM DistrictsView ORDER BY CAST(number AS INTEGER)"
             cursor.execute(query)
             rows = cursor.fetchall()
             
             dds = []
             for row in rows:
-                address = row[2].split('|') if row[2] is not None else ['null','null','null','null']
-                councils = row[6].split('|')
-
+                address = row[2].split('|') if row[2] else ['', '', '', '']
+                # Ensure we have at least 4 elements for address
+                while len(address) < 4:
+                    address.append('')
+                
+                councils = row[6].split('|') if row[6] else []
+                
                 dd = {
                     'number': str(row[0]) or '[ERROR]',
                     'district_deputy': row[1] or '[VACANT]',
                     'address': address[0] or '',
-                    'city_state_zip': address[1] + ', ' + address[2] + ' ' + address[3],
+                    'city_state_zip': f"{address[1]}, {address[2]} {address[3]}".strip(' ,'),
                     'phone': self._format_phone(row[3]) or '',
                     'email': row[4] or '',
                     'home_council': str(row[5]) or '',
-                    'councils': councils,
-                    #'wife': row[7]
+                    'councils': councils
                 }
                 dds.append(dd)
             
@@ -308,129 +305,100 @@ class KnightsWordGenerator:
             
         except sqlite3.Error as e:
             print(f"Database error: {e}")
-    
+            return []
+
     def _format_phone(self, phone):
-        """Format phone number for display"""
+        """Format phone number"""
         if not phone:
             return '[Phone Not Available]'
         
-        # Remove non-digits
         digits = ''.join(filter(str.isdigit, str(phone)))
         
-        # Format as (XXX) XXX-XXXX if 10 digits
         if len(digits) == 10:
             return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
         elif len(digits) == 11 and digits[0] == '1':
             return f"({digits[1:4]}) {digits[4:7]}-{digits[7:]}"
         else:
             return str(phone)
-    
+
     def get_sample_data(self):
-        """Return sample data if database is not available"""
+        """Sample data for testing"""
         return [
             {
-                'role': 'STATE SECRETARY',
-                'full_name': '[Name from Database]',
-                'wife': '[from database]',
-                'council': '[Council #]',
-                'phone': '[Phone Number]',
-                'address': '[Street Address]',
-                'city_state_zip': '[City, OK Zip]',
-                'email': '[email@domain.com]'
+                'role': 'STATE DEPUTY',
+                'full_name': 'John Doe',
+                'wife': 'Jane Doe',
+                'council': 'Council 1234',
+                'phone': '(405) 555-0123',
+                'address': '123 Main Street',
+                'city_state_zip': 'Oklahoma City, OK 73101',
+                'email': 'john.doe@email.com'
             }
         ]
-    
-    def generate_officer_section(self):
-        """
-            add data here
-        """
-        # Report on section enter.
-        print("Generating Officer Section...")
 
-        # Get officer data
+    def generate_pdf_document(self, output_filename):
+        """Generate PDF document"""
+        print("Generating PDF document...")
+        
+        margin_factor = 1.0
+        doc = SimpleDocTemplate(output_filename, pagesize=letter,
+                              rightMargin=margin_factor*inch, leftMargin=margin_factor*inch,
+                              topMargin=margin_factor*inch, bottomMargin=margin_factor*inch)
+        
+        story = []
+        
+        # Add title page with image
+        story.extend(self.create_title_page())
+        
+        # Officers section
         officers = self._get_state_officers_data()
-
-        # Panic if no data found; return
-        if not officers:
-            print('OFFICER DATA NOT FOUND...SKIPPING SECTION...')
-            return
-
-        # If data found, create the section
-        self.add_section_header("Oklahoma State Council Officers")
-
-        ## Create table for each officer
-        for _, officer in enumerate(officers):
-            print(f"Adding {officer['role']}: {officer['full_name']}")
-            self.create_officer_table(officer)
-
-        ## Insert a Page Break to end the section
-        self.doc.add_page_break()
-
-    def generate_dd_section(self):
-
-        print("Generating District Deputy Section")
+        if officers:
+            story.append(Paragraph("State Council Officers", self.pdf_styles['SectionHeader']))
+            story.append(Spacer(1, 5))
+            
+            for officer in officers:
+                print(f"Adding {officer['role']}: {officer['full_name']}")
+                story.append(self.create_pdf_officer_table(officer))
+                story.append(Spacer(1, 12))
+            
+            story.append(PageBreak())
+        
+        # District Deputies section
         dds = self._get_dd_data()
-        if not dds:
-            print('DD DATA NOT FOUND...SKIPPING SECTION...')
-            return
+        if dds:
+            story.append(Paragraph("District Deputies", self.pdf_styles['SectionHeader']))
+            story.append(Spacer(1, 12))
+            
+            for dd in dds:
+                print(f"Adding District {dd['number']}: {dd['district_deputy']}")
+                story.append(self.create_pdf_dd_table(dd))
+                story.append(Spacer(1, 8))
         
-        self.add_section_header("District Deputies")
-        self.doc.sections[-1].orientation = WD_ORIENTATION.LANDSCAPE
+        doc.build(story)
+        print(f"PDF document saved as: {output_filename}")
 
-        ## Create table for each DD
-        for _, dd in enumerate(dds):
-            self.create_dd_table(dd)
-    
-    def generate_document(self, output_filename="OK_Knights_StateOfficers.docx"):
-        """
-        Generate the complete Word document
-        
-        Args:
-            output_filename (str): Name of the output file
-        """
-
-        # Generate the Document Header matter
-        print("Generating Knights of Columbus State Officers Directory...")
-        
-        # Add header
-        self.add_topmatter()
-
-        # SECTION 1 - STATE OFFICERS
-        self.generate_officer_section()
-
-        # SECTION 2 - DISTRICT DEPUTIES
-        self.generate_dd_section()
-
-        # SECTION 3 - PROGRAM DIRECTORS / CHAIRMEN
-        self.add_section_header("Program Directors and Chairmen")
-
-        # SECTION X - PAST STATE DEPUTIES
-        self.add_section_header("Past State Deputies")
-
-        # SECTION Y - WIDOWS OF PAST STATE DEPUTIES
-        self.add_section_header("Widows of Past State Deputies")
-
-        # SECTION Z - STATE OFFICER WIVES
-        self.add_section_header("Wives of the State Council")
-        
-        # Save document
-        self.doc.save(output_filename)
-        print(f"Document saved as: {output_filename}")
-        return output_filename
+    def generate_document(self, output_base="OK_Knights_Directory"):
+        """Generate PDF document"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_filename = f"{output_base}_{timestamp}.pdf"
+        self.generate_pdf_document(pdf_filename)
 
 def main():
-    """Main function to run the generator"""
-    # Initialize generator
-    generator = KnightsWordGenerator()
+    """Main function"""
+    parser = argparse.ArgumentParser(description='Generate Knights of Columbus Directory PDF')
+    parser.add_argument('--database', default='ok_knights_directory.db',
+                       help='Database file path')
+    parser.add_argument('--output', default='OK_Knights_Directory',
+                       help='Output filename base')
+    parser.add_argument('--image', default='knights_logo.jpg',
+                       help='Logo image file path')
     
-    # Generate the document
-    output_file = generator.generate_document()
+    args = parser.parse_args()
     
-    print(f"\nSuccess! State Officers directory created: {output_file}")
-    print("\nTo use with your database:")
-    print("1. Place your 'ok_knights_directory.db' file in the same folder as this script")
-    print("2. Run the script again to populate with real data")
-    print("3. The script will automatically format phone numbers and addresses")
+    generator = KnightsDirectoryGenerator(args.database, args.image)
+    generator.generate_document(args.output)
+    
+    print(f"\nSuccess! Directory generated as PDF")
 
 if __name__ == "__main__":
     main()
