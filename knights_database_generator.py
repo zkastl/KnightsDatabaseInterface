@@ -25,7 +25,6 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.lib.colors import blue, black
 
 class KnightsDirectoryGenerator:
     def __init__(self, db_path="ok_knights_directory.db", image_path="knights_logo.jpg"):
@@ -43,7 +42,7 @@ class KnightsDirectoryGenerator:
             parent=self.pdf_styles['Title'],
             fontSize=28,
             spaceAfter=40,
-            spaceBefore=60,
+            spaceBefore=40,
             alignment=TA_CENTER,
             textColor=colors.darkblue,
             fontName='Helvetica-Bold'
@@ -76,7 +75,7 @@ class KnightsDirectoryGenerator:
         self.pdf_styles.add(ParagraphStyle(
             name='OfficerRole',
             parent=self.pdf_styles['Normal'],
-            fontSize=12,
+            fontSize=10,
             alignment=TA_LEFT,
             textColor=colors.black,
             fontName='Helvetica-Bold'
@@ -214,20 +213,21 @@ class KnightsDirectoryGenerator:
 
     def create_pdf_dd_table(self, dd_data):
         """Create a PDF table for district deputies (portrait format)"""
-        councils_text = '\n'.join(dd_data['councils'])
+        councils_text = '<br />'.join(dd_data['councils'])
         
         data = [
             [
-                Paragraph(f"<b>District {dd_data['number']}</b>", self.pdf_styles['Normal']),
-                Paragraph(f"{dd_data['district_deputy']}<br/>{dd_data['address']}<br/>{dd_data['city_state_zip']}", self.pdf_styles['Normal']),
-                Paragraph(dd_data['email'], self.pdf_styles['Normal']),
-                Paragraph(dd_data['phone'], self.pdf_styles['Normal']),
-                Paragraph(councils_text, self.pdf_styles['Normal'])
+                Paragraph(f"<b>{dd_data['number']}</b>", self.pdf_styles['Normal']),
+                Paragraph(f"{dd_data['district_deputy']}<br/>{dd_data['address']}<br/>{dd_data['city_state_zip']}", self.pdf_styles['CenterNormal']),
+                Paragraph(dd_data['email'], self.pdf_styles['CenterNormal']),
+                Paragraph(dd_data['phone'], self.pdf_styles['CenterNormal']),
+                Paragraph(councils_text, self.pdf_styles['RightNormal'])
             ]
         ]
         
         # Portrait-friendly column widths
-        table = Table(data, colWidths=[1*inch, 2.5*inch, 2*inch, 1.5*inch, 1.5*inch])
+        # SUM MUST REMAIN <= 7.5
+        table = Table(data, colWidths=[0.5*inch, 2.0*inch, 2.25*inch, 1.25*inch, 2.0*inch])
         
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
@@ -351,12 +351,19 @@ class KnightsDirectoryGenerator:
                     address.append('')
                 
                 councils = row[6].split('|') if row[6] else []
+
+                state_abbv = {
+                    'oklahoma': 'OK',
+                    'texas': 'TX',
+                    'colorado': 'CO',
+                    '': ''
+                }
                 
                 dd = {
                     'number': str(row[0]) or '[ERROR]',
                     'district_deputy': row[1] or '[VACANT]',
                     'address': address[0] or '',
-                    'city_state_zip': f"{address[1]}, {address[2]} {address[3]}".strip(' ,'),
+                    'city_state_zip': f"{address[1]}, {state_abbv[str.lower(address[2])]} {address[3]}".strip(' ,'),
                     'phone': self._format_phone(row[3]) or '',
                     'email': row[4] or '',
                     'home_council': str(row[5]) or '',
@@ -409,7 +416,7 @@ class KnightsDirectoryGenerator:
     def _format_phone(self, phone):
         """Format phone number"""
         if not phone:
-            return '[Phone Not Available]'
+            return ''
         
         digits = ''.join(filter(str.isdigit, str(phone)))
         
@@ -435,24 +442,41 @@ class KnightsDirectoryGenerator:
             }
         ]
 
-    def generate_pdf_document(self, output_filename):
-        """Generate PDF document"""
-        print("Generating PDF document...")
+    def generate_document(self, output_base):
+        """Generate PDF document with simple linked TOC"""
+        print("Generating PDF document with simple TOC...")
         
         margin_factor = 1.0
-        doc = SimpleDocTemplate(output_filename, pagesize=letter,
-                              rightMargin=margin_factor*inch, leftMargin=margin_factor*inch,
-                              topMargin=margin_factor*inch, bottomMargin=margin_factor*inch)
+
+        # Generate PDF document with timestamp        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_filename = f"{output_base}_{timestamp}.pdf"
+
+        doc = SimpleDocTemplate(pdf_filename, pagesize=letter,
+                            rightMargin=margin_factor*inch, leftMargin=margin_factor*inch,
+                            topMargin=margin_factor*inch, bottomMargin=margin_factor*inch)
         
         story = []
         
-        # Add title page with image
+        # Add title page
         story.extend(self.create_title_page())
         
-        # Officers section
+        # Add simple TOC
+        story.append(Paragraph("Table of Contents", self.pdf_styles['TOCHeading']))
+        story.append(Spacer(1, 30))
+        
+        # Manual TOC entries with links
+        story.append(Paragraph('<link href="#state_officers" color="blue">State Council Officers</link>', self.pdf_styles['Normal']))
+        story.append(Spacer(1, 8))
+        story.append(Paragraph('<link href="#district_deputies" color="blue">District Deputies</link>', self.pdf_styles['Normal']))
+        story.append(Spacer(1, 8))
+        story.append(Paragraph('<link href="#program_directors" color="blue">Program Directors and Chairmen</link>', self.pdf_styles['Normal']))
+        story.append(PageBreak())
+        
+        # Officers section with anchor
         officers = self._get_state_officers_data()
         if officers:
-            story.append(Paragraph("State Council Officers", self.pdf_styles['SectionHeader']))
+            story.append(Paragraph('<a name="state_officers"/>State Council Officers', self.pdf_styles['SectionHeader']))
             story.append(Spacer(1, 5))
             
             for officer in officers:
@@ -462,38 +486,32 @@ class KnightsDirectoryGenerator:
             
             story.append(PageBreak())
         
-        # District Deputies section
+        # District Deputies section with anchor
         dds = self._get_dd_data()
         if dds:
-            story.append(Paragraph("District Deputies", self.pdf_styles['SectionHeader']))
+            story.append(Paragraph('<a name="district_deputies"/>District Deputies', self.pdf_styles['SectionHeader']))
             story.append(Spacer(1, 12))
             
             for dd in dds:
                 print(f"Adding District {dd['number']}: {dd['district_deputy']}")
                 story.append(self.create_pdf_dd_table(dd))
                 story.append(Spacer(1, 8))
+            
+            story.append(PageBreak())
         
-        # Program Directors Section
+        # Program Directors Section with anchor
         p_directors = self._get_program_director_data()
         if p_directors:
-            story.append(Paragraph("Program Directors and Chairmen", self.pdf_styles['SectionHeader']))
-            story.append(Spacer(1,5))
+            story.append(Paragraph('<a name="program_directors"/>Program Directors and Chairmen', self.pdf_styles['SectionHeader']))
+            story.append(Spacer(1, 5))
 
             for director in p_directors:
                 print(f"Adding {director['role']}: {director['full_name']}")
                 story.append(self.create_pdf_programdirector_table(director))
                 story.append(Spacer(1, 12))
 
-        #story.append(PageBreak())
-
         doc.build(story)
-        print(f"PDF document saved as: {output_filename}")
-
-    def generate_document(self, output_base="OK_Knights_Directory"):
-        """Generate PDF document"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        pdf_filename = f"{output_base}_{timestamp}.pdf"
-        self.generate_pdf_document(pdf_filename)
+        print(f"PDF document saved as: {pdf_filename}")
 
 def main():
     """Main function"""
@@ -510,7 +528,7 @@ def main():
     generator = KnightsDirectoryGenerator(args.database, args.image)
     generator.generate_document(args.output)
     
-    print(f"\nSuccess! Directory generated as PDF")
+    print("\nSuccess! Directory generated as PDF")
 
 if __name__ == "__main__":
     main()
