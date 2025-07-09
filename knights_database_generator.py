@@ -25,6 +25,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.colors import blue, black
 
 class KnightsDirectoryGenerator:
     def __init__(self, db_path="ok_knights_directory.db", image_path="knights_logo.jpg"):
@@ -95,6 +96,17 @@ class KnightsDirectoryGenerator:
             alignment=TA_RIGHT
         ))
 
+        # Add TOC styles at the end
+        self.pdf_styles.add(ParagraphStyle(
+        name='TOCHeading',
+        parent=self.pdf_styles['Heading1'],
+        fontSize=20,
+        spaceAfter=20,
+        spaceBefore=10,
+        alignment=TA_CENTER,
+        textColor=colors.darkblue
+    ))
+
     def create_title_page(self):
         """Create a full title page with image"""
         title_elements = []
@@ -138,7 +150,8 @@ class KnightsDirectoryGenerator:
         
         # Add current year
         current_year = datetime.now().year
-        title_elements.append(Paragraph(f"{current_year}", self.pdf_styles['SubTitle']))
+        next_year = current_year + 1
+        title_elements.append(Paragraph(f"{current_year}-{next_year}", self.pdf_styles['SubTitle']))
         
         # Add some additional spacing to center content
         title_elements.append(Spacer(1, 100))
@@ -230,6 +243,57 @@ class KnightsDirectoryGenerator:
         
         return table
 
+    def create_pdf_programdirector_table(self, officer_data):
+        """Create a PDF table for program directors and chairman"""
+        data = [
+            # Row 1: Role (spanning all columns)
+            [
+                Paragraph(officer_data['role'], self.pdf_styles['OfficerRole'])
+            ],
+            # Row 2: Details
+            [
+                Paragraph(officer_data['full_name'], self.pdf_styles['Normal']),
+                Paragraph(officer_data['wife'], self.pdf_styles['Normal']),
+                Paragraph(officer_data['council'], self.pdf_styles['Normal']),
+                Paragraph(officer_data['phone'], self.pdf_styles['RightNormal'])
+            ],
+            # Row 3: Address
+            [
+                Paragraph(officer_data['address'], self.pdf_styles['Normal']),
+                '', '', ''
+            ],
+            # Row 4: City/State/Zip and Email
+            [
+                Paragraph(officer_data['city_state_zip'], self.pdf_styles['Normal']),
+                '',
+                Paragraph(officer_data['email'], self.pdf_styles['RightNormal']),
+                ''
+            ]
+        ]
+        
+        table = Table(data, 
+                      colWidths=[2.2*inch, 1.0*inch, 1.0*inch, 1.8*inch],
+                      rowHeights=[0.3*inch, 0.175*inch, 0.175*inch, 0.175*inch])
+        
+        # Table styling (no borders)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 5),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('SPAN', (0, 0), (-1, 0)),  # Span role across all columns
+            ('SPAN', (0, 2), (1, 2)),   # Span address across 2 columns
+            ('SPAN', (0, 3), (1, 3)),   # Span city/state/zip across 2 columns
+            ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        return table
+
     def _get_state_officers_data(self):
         """Query database for state officers"""
         if not os.path.exists(self.db_path):
@@ -307,6 +371,41 @@ class KnightsDirectoryGenerator:
             print(f"Database error: {e}")
             return []
 
+    def _get_program_director_data(self):
+        """Query database for state officers"""
+        if not os.path.exists(self.db_path):
+            print(f"Database file not found: {self.db_path}")
+            return self.get_sample_data()
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM ProgramDirectorView"
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            officers = []
+            for row in rows:
+                officer = {
+                    'full_name': row[0] or '[VACANT]',
+                    'wife': row[1] or '',
+                    'address': row[2] or '[NO DATA]',
+                    'city_state_zip': row[3] or '[NO DATA]',
+                    'phone': self._format_phone(row[4]),
+                    'email': row[5] or '[NO DATA]',
+                    'council': f"{row[6]}" if row[6] else '[NO DATA]',
+                    'role': row[8] or '[ERROR]'
+                }
+                officers.append(officer)
+            
+            conn.close()
+            return officers
+            
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return self.get_sample_data()
+
     def _format_phone(self, phone):
         """Format phone number"""
         if not phone:
@@ -374,6 +473,19 @@ class KnightsDirectoryGenerator:
                 story.append(self.create_pdf_dd_table(dd))
                 story.append(Spacer(1, 8))
         
+        # Program Directors Section
+        p_directors = self._get_program_director_data()
+        if p_directors:
+            story.append(Paragraph("Program Directors and Chairmen", self.pdf_styles['SectionHeader']))
+            story.append(Spacer(1,5))
+
+            for director in p_directors:
+                print(f"Adding {director['role']}: {director['full_name']}")
+                story.append(self.create_pdf_programdirector_table(director))
+                story.append(Spacer(1, 12))
+
+        #story.append(PageBreak())
+
         doc.build(story)
         print(f"PDF document saved as: {output_filename}")
 
