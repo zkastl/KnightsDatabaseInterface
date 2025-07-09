@@ -22,7 +22,7 @@ from datetime import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
@@ -209,7 +209,7 @@ class KnightsDirectoryGenerator:
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
         
-        return table
+        return KeepTogether(table)
 
     def create_pdf_dd_table(self, dd_data):
         """Create a PDF table for district deputies (portrait format)"""
@@ -221,7 +221,7 @@ class KnightsDirectoryGenerator:
                 Paragraph(f"{dd_data['district_deputy']}<br/>{dd_data['address']}<br/>{dd_data['city_state_zip']}", self.pdf_styles['CenterNormal']),
                 Paragraph(dd_data['email'], self.pdf_styles['CenterNormal']),
                 Paragraph(dd_data['phone'], self.pdf_styles['CenterNormal']),
-                Paragraph(councils_text, self.pdf_styles['RightNormal'])
+                Paragraph(councils_text, self.pdf_styles['CenterNormal'])
             ]
         ]
         
@@ -241,7 +241,7 @@ class KnightsDirectoryGenerator:
             ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
         ]))
         
-        return table
+        return KeepTogether(table)
 
     def create_pdf_programdirector_table(self, officer_data):
         """Create a PDF table for program directors and chairman"""
@@ -292,7 +292,7 @@ class KnightsDirectoryGenerator:
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
         
-        return table
+        return KeepTogether(table)
 
     def _get_state_officers_data(self):
         """Query database for state officers"""
