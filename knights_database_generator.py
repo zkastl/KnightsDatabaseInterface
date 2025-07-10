@@ -293,6 +293,15 @@ class KnightsDirectoryGenerator:
         ]))
         
         return KeepTogether(table)
+    
+    def create_pdf_agents_table(self, agents):
+        """Create a PDF table for all of the agents"""
+        data = [
+            # Row 1: Role (spanning all columns, may have multiple entries)
+            [
+                Paragraph(agents['role'])
+            ],        
+        ]
 
     def _get_state_officers_data(self):
         """Query database for state officers"""
@@ -412,6 +421,41 @@ class KnightsDirectoryGenerator:
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return self.get_sample_data()
+        
+    def _get_agent_data(self):
+        """Query database for state officers"""
+        if not os.path.exists(self.db_path):
+            print(f"Database file not found: {self.db_path}")
+            return self.get_sample_data()
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM AgentsView"
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            officers = []
+            for row in rows:
+                #councils_represented = row[4].split(',')
+
+                officer = {
+                    'name': row[0] or '[ERROR]',
+                    'email': row[1] or '[ERROR]',
+                    'council': row[2] or '[ERROR]',
+                    'phone': self._format_phone(row[3]) or '[ERROR]',
+                    'councils_represented': f'Councils Represented: {row[4]}' or '',
+                    'role': row[5] or '[ERROR]'
+                }
+                officers.append(officer)
+            
+            conn.close()
+            return officers
+            
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return self.get_sample_data()
 
     def _format_phone(self, phone):
         """Format phone number"""
@@ -510,6 +554,16 @@ class KnightsDirectoryGenerator:
                 story.append(self.create_pdf_programdirector_table(director))
                 story.append(Spacer(1, 12))
 
+        # Insurance Agents Section with anchor
+        agents =self._get_agent_data()
+        if agents:
+            story.append(Paragraph('<a name="agents"/>Insurance Agents', self.pdf_styles['SectionHeader']))
+            story.append(Spacer(1,5))
+
+            for agent in agents:
+                print(f"Adding agent {agent['name']}")
+                story.append(self.create_pdf_agents_table(agents))
+                story.append(Spacer(1, 12))
         doc.build(story)
         print(f"PDF document saved as: {pdf_filename}")
 
