@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pylint: disable=C0303,C0301
 """
 Enhanced Knights of Columbus Directory Generator
 
@@ -27,6 +28,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 class KnightsDirectoryGenerator:
+    """Class to represent all functions and data for generating the KofC database"""
+
     def __init__(self, db_path="ok_knights_directory.db", image_path="knights_logo.jpg"):
         self.db_path = db_path
         self.image_path = image_path
@@ -47,7 +50,7 @@ class KnightsDirectoryGenerator:
             textColor=colors.darkblue,
             fontName='Helvetica-Bold'
         ))
-        
+
         # Subtitle style for title page
         self.pdf_styles.add(ParagraphStyle(
             name='SubTitle',
@@ -59,7 +62,7 @@ class KnightsDirectoryGenerator:
             textColor=colors.darkblue,
             fontName='Helvetica'
         ))
-        
+
         # Section header style
         self.pdf_styles.add(ParagraphStyle(
             name='SectionHeader',
@@ -70,7 +73,7 @@ class KnightsDirectoryGenerator:
             alignment=TA_CENTER,
             textColor=colors.darkblue
         ))
-        
+
         # Officer role style
         self.pdf_styles.add(ParagraphStyle(
             name='OfficerRole',
@@ -104,16 +107,24 @@ class KnightsDirectoryGenerator:
         spaceBefore=10,
         alignment=TA_CENTER,
         textColor=colors.darkblue
-    ))
+        ))
+
+        self.pdf_styles.add(ParagraphStyle(
+            name='NoBreakNormal',
+            parent=self.pdf_styles['Normal'],
+            alignment=TA_LEFT,
+            wordWrap='LTR',  # Left-to-right word wrapping
+            splitLongWords=0,  # Don't split long words
+        ))
 
     def create_title_page(self):
         """Create a full title page with image"""
         title_elements = []
-        
+
         # Add main title
         title_elements.append(Paragraph("Oklahoma Knights of Columbus", self.pdf_styles['CustomTitle']))
         title_elements.append(Paragraph("State Directory", self.pdf_styles['CustomTitle']))
-        
+
         # Add image if it exists
         if os.path.exists(self.image_path):
             try:
@@ -137,10 +148,10 @@ class KnightsDirectoryGenerator:
                 
                 title_elements.append(Spacer(1, 30))
                 title_elements.append(img)
-                title_elements.append(Spacer(1, 30))
+                title_elements.append(Spacer(1, 300))
                 print(f"Added image: {self.image_path}")
                 
-            except Exception as e:
+            except FileNotFoundError as e:
                 print(f"Warning: Could not load image {self.image_path}: {e}")
                 title_elements.append(Spacer(1, 60))
         else:
@@ -151,9 +162,6 @@ class KnightsDirectoryGenerator:
         current_year = datetime.now().year
         next_year = current_year + 1
         title_elements.append(Paragraph(f"{current_year}-{next_year}", self.pdf_styles['SubTitle']))
-        
-        # Add some additional spacing to center content
-        title_elements.append(Spacer(1, 100))
         
         # Add page break after title page
         title_elements.append(PageBreak())
@@ -296,26 +304,34 @@ class KnightsDirectoryGenerator:
     
     def create_pdf_agents_table(self, agent):
         """Create a PDF table for all of the agents"""
+        formatted_councils = agent['councils_represented'].replace(',', ', ')#'&nbsp;')
+        # Format the councils text to only create new lines between council numbers
+
         data = [
             # Row 1: Role (spanning all columns, may have multiple entries)
             [
-                Paragraph(agent['role'])
+                Paragraph(agent['role'], self.pdf_styles['OfficerRole'])
             ],
             [
-                Paragraph(agent['name']),
-                Paragraph(agent['wife']),
-                Paragraph(agent['council']),
-                Paragraph(agent['phone'])
+                Paragraph(agent['name'], self.pdf_styles['Normal']),
+                Paragraph(agent['wife'], self.pdf_styles['CenterNormal']),
+                Paragraph(agent['council'], self.pdf_styles['CenterNormal']),
+                Paragraph(agent['phone'], self.pdf_styles['RightNormal'])
             ],
             [
-                Paragraph(agent['counc'])
+                Paragraph("<b>Councils Represented:</b>", self.pdf_styles['Normal']),
+                '',
+                Paragraph(agent['email'], self.pdf_styles['RightNormal']),
+                ''
             ],
-            []
+            [
+                Paragraph(formatted_councils, self.pdf_styles['NoBreakNormal'])
+            ]
         ]
 
         table = Table(data, 
                       colWidths=[2.2*inch, 1.0*inch, 1.0*inch, 1.8*inch],
-                      rowHeights=[0.3*inch, 0.175*inch, 0.175*inch, 0.175*inch])
+                      rowHeights=[0.2*inch, 0.175*inch, 0.25*inch, 0.25*inch])
         
         # Table styling (no borders)
         table.setStyle(TableStyle([
@@ -328,9 +344,8 @@ class KnightsDirectoryGenerator:
             ('TOPPADDING', (0, 0), (-1, 0), 5),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('SPAN', (0, 0), (-1, 0)),  # Span role across all columns
-            ('SPAN', (0, 2), (1, 2)),   # Span address across 2 columns
-            ('SPAN', (0, 3), (1, 3)),   # Span city/state/zip across 2 columns
-            ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
+            ('SPAN', (0, 3), (2, 3)),   # Span councils across 3 columns
+            ('SPAN', (2, 2), (3, 2)),   # Span email across 2 columns
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
         
@@ -471,15 +486,13 @@ class KnightsDirectoryGenerator:
             
             agents = []
             for row in rows:
-                #councils_represented = row[4].split(',')
-
                 agent = {
                     'name': row[0] or '[ERROR]',
                     'wife': row[1] or '',
                     'email': row[2] or '[ERROR]',
-                    'council': row[3] or '[ERROR]',
+                    'council': str(row[3]) or '[ERROR]',
                     'phone': self._format_phone(row[4]) or '[ERROR]',
-                    'councils_represented': f'Councils Represented: {row[5]}' or '',
+                    'councils_represented': row[5] or '',
                     'role': row[6] or '[ERROR]'
                 }
                 agents.append(agent)
@@ -549,6 +562,8 @@ class KnightsDirectoryGenerator:
         story.append(Paragraph('<link href="#district_deputies" color="blue">District Deputies</link>', self.pdf_styles['Normal']))
         story.append(Spacer(1, 8))
         story.append(Paragraph('<link href="#program_directors" color="blue">Program Directors and Chairmen</link>', self.pdf_styles['Normal']))
+        story.append(Spacer(1, 8))
+        story.append(Paragraph('<link href="#agents" color="blue">Insurance Agents</link>', self.pdf_styles['Normal']))
         story.append(PageBreak())
         
         # Officers section with anchor
@@ -588,16 +603,22 @@ class KnightsDirectoryGenerator:
                 story.append(self.create_pdf_programdirector_table(director))
                 story.append(Spacer(1, 12))
 
+        story.append(PageBreak())
+
         # Insurance Agents Section with anchor
         agents =self._get_agent_data()
         if agents:
-            story.append(Paragraph('<a name="agents"/>Insurance Agents', self.pdf_styles['SectionHeader']))
+            story.append(Paragraph('<a name="agents"/>Insurance Agents',
+                                   self.pdf_styles['SectionHeader']))
             story.append(Spacer(1,5))
 
             for agent in agents:
                 print(f"Adding agent {agent['name']}")
                 story.append(self.create_pdf_agents_table(agent))
                 story.append(Spacer(1, 12))
+
+            story.append(PageBreak())
+
         doc.build(story)
         print(f"PDF document saved as: {pdf_filename}")
 
