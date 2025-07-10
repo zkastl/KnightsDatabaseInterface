@@ -294,14 +294,47 @@ class KnightsDirectoryGenerator:
         
         return KeepTogether(table)
     
-    def create_pdf_agents_table(self, agents):
+    def create_pdf_agents_table(self, agent):
         """Create a PDF table for all of the agents"""
         data = [
             # Row 1: Role (spanning all columns, may have multiple entries)
             [
-                Paragraph(agents['role'])
-            ],        
+                Paragraph(agent['role'])
+            ],
+            [
+                Paragraph(agent['name']),
+                Paragraph(agent['wife']),
+                Paragraph(agent['council']),
+                Paragraph(agent['phone'])
+            ],
+            [
+                Paragraph(agent['counc'])
+            ],
+            []
         ]
+
+        table = Table(data, 
+                      colWidths=[2.2*inch, 1.0*inch, 1.0*inch, 1.8*inch],
+                      rowHeights=[0.3*inch, 0.175*inch, 0.175*inch, 0.175*inch])
+        
+        # Table styling (no borders)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('TOPPADDING', (0, 0), (-1, 0), 5),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('SPAN', (0, 0), (-1, 0)),  # Span role across all columns
+            ('SPAN', (0, 2), (1, 2)),   # Span address across 2 columns
+            ('SPAN', (0, 3), (1, 3)),   # Span city/state/zip across 2 columns
+            ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        return KeepTogether(table)
 
     def _get_state_officers_data(self):
         """Query database for state officers"""
@@ -436,22 +469,23 @@ class KnightsDirectoryGenerator:
             cursor.execute(query)
             rows = cursor.fetchall()
             
-            officers = []
+            agents = []
             for row in rows:
                 #councils_represented = row[4].split(',')
 
-                officer = {
+                agent = {
                     'name': row[0] or '[ERROR]',
-                    'email': row[1] or '[ERROR]',
-                    'council': row[2] or '[ERROR]',
-                    'phone': self._format_phone(row[3]) or '[ERROR]',
-                    'councils_represented': f'Councils Represented: {row[4]}' or '',
-                    'role': row[5] or '[ERROR]'
+                    'wife': row[1] or '',
+                    'email': row[2] or '[ERROR]',
+                    'council': row[3] or '[ERROR]',
+                    'phone': self._format_phone(row[4]) or '[ERROR]',
+                    'councils_represented': f'Councils Represented: {row[5]}' or '',
+                    'role': row[6] or '[ERROR]'
                 }
-                officers.append(officer)
+                agents.append(agent)
             
             conn.close()
-            return officers
+            return agents
             
         except sqlite3.Error as e:
             print(f"Database error: {e}")
@@ -562,7 +596,7 @@ class KnightsDirectoryGenerator:
 
             for agent in agents:
                 print(f"Adding agent {agent['name']}")
-                story.append(self.create_pdf_agents_table(agents))
+                story.append(self.create_pdf_agents_table(agent))
                 story.append(Spacer(1, 12))
         doc.build(story)
         print(f"PDF document saved as: {pdf_filename}")
