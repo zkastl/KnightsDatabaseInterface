@@ -570,6 +570,10 @@ class KnightsDirectoryGenerator:
         officers = self._get_state_officers_data()
         if officers:
             story.append(Paragraph('<a name="state_officers"/>State Council Officers', self.pdf_styles['SectionHeader']))
+            story.append(Paragraph('Official State Council Website: <link href="https://www.okkofc.org">www.okkofc.org</link>',
+                                   self.pdf_styles['CenterNormal']))
+            story.append(Paragraph('State forms submittal email: <link href=mailto:okkofcsubmit@gmail.com">okkofcsubmit@gmail.com</link>',
+                                   self.pdf_styles['CenterNormal']))
             story.append(Spacer(1, 5))
             
             for officer in officers:
@@ -618,6 +622,18 @@ class KnightsDirectoryGenerator:
                 story.append(Spacer(1, 12))
 
             story.append(PageBreak())
+
+        # TODO Past State Deputies Section with Anchor
+        # | TERM | NAME    | ----- | COUNCIL | PHONE |
+        # | ---- | ADDRESS | ----- | ------- | ----- |
+        # | ---- | C/S/Z   | EMAIL | ------- | ----- |
+
+        # NO BREAK
+
+        # TODO Widows of Past State Deputies with Anchor
+        # | TERM | NAME    | ----- | COUNCIL | PHONE |
+        # | ---- | ADDRESS | ----- | ------- | ----- |
+        # | ---- | C/S/Z   | EMAIL | ------- | ----- |
 
         doc.build(story)
         print(f"PDF document saved as: {pdf_filename}")
