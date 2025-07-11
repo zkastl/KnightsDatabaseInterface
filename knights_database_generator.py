@@ -374,7 +374,7 @@ class KnightsDirectoryGenerator:
                     'city_state_zip': row[3] or '[NO DATA]',
                     'phone': self._format_phone(row[4]),
                     'email': row[5] or '[NO DATA]',
-                    'council': f"{row[6]}" if row[6] else '[NO DATA]',
+                    'council': f"{row[6]}" if row[6] else '',
                     'role': row[8] or '[ERROR]'
                 }
                 officers.append(officer)
