@@ -37,6 +37,13 @@ class KnightsDirectoryGenerator:
         self.pdf_styles = getSampleStyleSheet()
         self.setup_pdf_styles()
 
+        self.state_abbv = {
+            'oklahoma': 'OK',
+            'texas': 'TX',
+            'colorado': 'CO',
+            '': ''
+        }
+
     def setup_pdf_styles(self):
         """Setup custom PDF styles"""
         # Title style - larger for title page
@@ -112,6 +119,7 @@ class KnightsDirectoryGenerator:
         self.pdf_styles.add(ParagraphStyle(
             name='NoBreakNormal',
             parent=self.pdf_styles['Normal'],
+            spaceBefore=20,
             alignment=TA_LEFT,
             wordWrap='LTR',  # Left-to-right word wrapping
             splitLongWords=0,  # Don't split long words
@@ -267,8 +275,7 @@ class KnightsDirectoryGenerator:
             ],
             # Row 3: Address
             [
-                Paragraph(officer_data['address'], self.pdf_styles['Normal']),
-                '', '', ''
+                Paragraph(officer_data['address'], self.pdf_styles['Normal'])
             ],
             # Row 4: City/State/Zip and Email
             [
@@ -294,7 +301,7 @@ class KnightsDirectoryGenerator:
             ('TOPPADDING', (0, 0), (-1, 0), 5),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('SPAN', (0, 0), (-1, 0)),  # Span role across all columns
-            ('SPAN', (0, 2), (1, 2)),   # Span address across 2 columns
+            ('SPAN', (0, 2), (2, 2)),   # Span address across 3 columns
             ('SPAN', (0, 3), (1, 3)),   # Span city/state/zip across 2 columns
             ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -319,19 +326,22 @@ class KnightsDirectoryGenerator:
                 Paragraph(agent['phone'], self.pdf_styles['RightNormal'])
             ],
             [
-                Paragraph("<b>Councils Represented:</b>", self.pdf_styles['Normal']),
+                Paragraph(agent['address'], self.pdf_styles['Normal']),
                 '',
                 Paragraph(agent['email'], self.pdf_styles['RightNormal']),
                 ''
             ],
             [
-                Paragraph(formatted_councils, self.pdf_styles['NoBreakNormal'])
+                Paragraph(f"{agent['city']}, {agent['state']} {agent['zip']}"),
+            ],
+            [
+                Paragraph(f"<b>Councils:</b> {formatted_councils}", self.pdf_styles['NoBreakNormal']),
             ]
         ]
 
         table = Table(data, 
                       colWidths=[2.2*inch, 1.0*inch, 1.0*inch, 1.8*inch],
-                      rowHeights=[0.2*inch, 0.175*inch, 0.25*inch, 0.25*inch])
+                      rowHeights=[0.2*inch, 0.2*inch, 0.175*inch, 0.175*inch, 0.3*inch])
         
         # Table styling (no borders)
         table.setStyle(TableStyle([
@@ -344,7 +354,8 @@ class KnightsDirectoryGenerator:
             ('TOPPADDING', (0, 0), (-1, 0), 5),
             ('BACKGROUND', (0, 1), (-1, -1), colors.white),
             ('SPAN', (0, 0), (-1, 0)),  # Span role across all columns
-            ('SPAN', (0, 3), (2, 3)),   # Span councils across 3 columns
+            ('SPAN', (0, 2), (2, 2)),   # Span address across 2 columns
+            ('SPAN', (0, 4), (2, 4)),   # Span councils across 3 columns
             ('SPAN', (2, 2), (3, 2)),   # Span email across 2 columns
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
@@ -408,19 +419,12 @@ class KnightsDirectoryGenerator:
                     address.append('')
                 
                 councils = row[6].split('|') if row[6] else []
-
-                state_abbv = {
-                    'oklahoma': 'OK',
-                    'texas': 'TX',
-                    'colorado': 'CO',
-                    '': ''
-                }
                 
                 dd = {
                     'number': str(row[0]) or '[ERROR]',
                     'district_deputy': row[1] or '[VACANT]',
                     'address': address[0] or '',
-                    'city_state_zip': f"{address[1]}, {state_abbv[str.lower(address[2])]} {address[3]}".strip(' ,'),
+                    'city_state_zip': f"{address[1]}, {self.state_abbv[str.lower(address[2])]} {address[3]}".strip(' ,'),
                     'phone': self._format_phone(row[3]) or '',
                     'email': row[4] or '',
                     'home_council': str(row[5]) or '',
@@ -493,7 +497,11 @@ class KnightsDirectoryGenerator:
                     'council': str(row[3]) or '[ERROR]',
                     'phone': self._format_phone(row[4]) or '[ERROR]',
                     'councils_represented': row[5] or '',
-                    'role': row[6] or '[ERROR]'
+                    'role': row[6] or '[ERROR]',
+                    'address': row[7] or '',
+                    'city': row[8] or '',
+                    'state': self.state_abbv[str.lower(row[9])] or '',
+                    'zip': row[10] or ''
                 }
                 agents.append(agent)
             
