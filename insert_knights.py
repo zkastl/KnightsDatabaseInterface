@@ -23,11 +23,11 @@ for text in raw_text:
         else f"\'{e}\'" if i not in [9,10] else e for i,e \
         in enumerate(text[:-1])]) + ')')
 
-v = ','.join(value_text)
+knights_insert_text = ','.join(value_text)
 
 con = sqlite3.connect(DB_FILENAME)
 cur = con.cursor()
-_ = cur.execute(INSERT_TEXT + v)
+_ = cur.execute(INSERT_TEXT + knights_insert_text)
 #con.commit()
 
 out = cur.execute(SELECT_TEXT)
