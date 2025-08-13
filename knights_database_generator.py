@@ -258,6 +258,54 @@ class KnightsDirectoryGenerator:
         ]))
         
         return KeepTogether(table)
+    
+    def create_pdf_council_table(self, council_data):
+        """Create a PDF table for councils (portrait format)"""        
+        data = [
+            [
+                Paragraph(f"<b>{council_data['number']}</b>", self.pdf_styles['Normal']),
+
+                Paragraph(f"{council_data['address'][0]}<br/>\
+                            {council_data['address'][1]}<br/>\
+                            {council_data['address'][2]}<br/>\
+                            {council_data['address'][3]}",
+                      self.pdf_styles['CenterNormal']),
+
+                Paragraph(council_data['district'], self.pdf_styles['CenterNormal']),
+
+                Paragraph(f"{council_data['gk'][0]}<br/>\
+                            {council_data['gk'][1]}<br/>\
+                            {council_data['gk'][2]}<br/>\
+                            {council_data['gk'][3]}<br/>\
+                            {council_data['gk'][4]}",
+                      self.pdf_styles['CenterNormal']),
+
+                Paragraph(f"{council_data['fs'][0]}<br/>\
+                            {council_data['fs'][1]}<br/>\
+                            {council_data['fs'][2]}<br/>\
+                            {council_data['fs'][3]}<br/>\
+                            {council_data['fs'][4]}",
+                      self.pdf_styles['CenterNormal']),
+            ]
+        ]
+        
+        # Portrait-friendly column widths
+        # SUM MUST REMAIN <= 7.5
+        table = Table(data, colWidths=[0.5*inch, 1.5*inch, 0.5*inch, 2.75*inch, 2.75*inch])
+        
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('SPAN', (2, 3), (3, 3)),   # Span email across 2 columns
+        ]))
+        
+        return KeepTogether(table)
 
     def create_pdf_programdirector_table(self, officer_data):
         """Create a PDF table for program directors and chairman"""
@@ -438,6 +486,41 @@ class KnightsDirectoryGenerator:
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return []
+        
+    def _get_council_data(self):
+        """query database for councils"""
+        if not os.path.exists(self.db_path):
+            print(f'Database file not found: {self.db_path}')
+            return []
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM CouncilsView ORDER BY CAST(number AS INTEGER)"
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+            councils = []
+            for row in rows:
+                address = row[1].split('\n') or ['XXXXX']
+                gk = (row[3].split('\n') if row[3] is not None else ['', '', '']) + [self._format_phone(row[4]), row[5] if row[5] is not None else '']
+                fs = (row[6].split('\n') if row[6] is not None else ['', '', '']) + [self._format_phone(row[7]), row[8] if row[8] is not None else '']
+                council = {
+                    'number': str(row[0] or '[ERROR]'),
+                    'address': address,
+                    'district': str(row[2]) or 'UNASSIGNED',
+                    'gk': gk,
+                    'fs': fs
+                }
+                councils.append(council)
+
+            conn.close()
+            return councils
+
+        except sqlite3.Error as e:
+            print(f'Database error: {e}')
+            return []
 
     def _get_program_director_data(self):
         """Query database for state officers"""
@@ -600,6 +683,18 @@ class KnightsDirectoryGenerator:
             for dd in dds:
                 print(f"Adding District {dd['number']}: {dd['district_deputy']}")
                 story.append(self.create_pdf_dd_table(dd))
+                story.append(Spacer(1, 8))
+            
+            story.append(PageBreak())
+
+        councils = self._get_council_data()
+        if councils:
+            story.append(Paragraph('<a name="councils"/>Councils', self.pdf_styles['SectionHeader']))
+            story.append(Spacer(1, 12))
+            
+            for council in councils:
+                print(f"Adding Council {council['number']}")
+                story.append(self.create_pdf_council_table(council))
                 story.append(Spacer(1, 8))
             
             story.append(PageBreak())
