@@ -748,7 +748,7 @@ def main():
                        help='Database file path')
     parser.add_argument('--output', default='OK_Knights_Directory',
                        help='Output filename base')
-    parser.add_argument('--image', default='knights_logo.jpg',
+    parser.add_argument('--image', default='kofc_logo.png',
                        help='Logo image file path')
     
     args = parser.parse_args()
