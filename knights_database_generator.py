@@ -260,11 +260,11 @@ class KnightsDirectoryGenerator:
         return KeepTogether(table)
     
     def create_pdf_council_table(self, council_data):
-        """Create a PDF table for councils (portrait format)"""        
+        """Create a PDF table for councils (portrait format)"""
         data = [
             [
                 Paragraph(f"<b>{council_data['number']}</b>", self.pdf_styles['Normal']),
-
+                
                 Paragraph(f"{council_data['address'][0]}<br/>\
                             {council_data['address'][1]}<br/>\
                             {council_data['address'][2]}<br/>\
@@ -503,7 +503,7 @@ class KnightsDirectoryGenerator:
 
             councils = []
             for row in rows:
-                address = row[1].split('\n') or ['XXXXX']
+                address = row[1].split('\n') if row[1] is not None else ['', '', '', '']
                 gk = (row[3].split('\n') if row[3] is not None else ['', '', '']) + [self._format_phone(row[4]), row[5] if row[5] is not None else '']
                 fs = (row[6].split('\n') if row[6] is not None else ['', '', '']) + [self._format_phone(row[7]), row[8] if row[8] is not None else '']
                 council = {
@@ -539,14 +539,14 @@ class KnightsDirectoryGenerator:
             officers = []
             for row in rows:
                 officer = {
-                    'full_name': row[0] or '[VACANT]',
-                    'wife': row[1] or '',
-                    'address': row[2] or '[NO DATA]',
-                    'city_state_zip': row[3] or '[NO DATA]',
-                    'phone': self._format_phone(row[4]),
-                    'email': row[5] or '[NO DATA]',
-                    'council': f"{row[6]}" if row[6] else '[NO DATA]',
-                    'role': row[8] or '[ERROR]'
+                    'full_name': row[1] or '[VACANT]',
+                    'wife': row[2] or '',
+                    'address': row[3] or '[NO DATA]',
+                    'city_state_zip': row[4] or '[NO DATA]',
+                    'phone': self._format_phone(row[5]),
+                    'email': row[6] or '[NO DATA]',
+                    'council': f"{row[7]}" if row[7] else '[NO DATA]',
+                    'role': row[0] or '[ERROR]'
                 }
                 officers.append(officer)
             
@@ -650,9 +650,9 @@ class KnightsDirectoryGenerator:
         # Manual TOC entries with links
         story.append(Paragraph('<link href="#state_officers" color="blue">State Council Officers</link>', self.pdf_styles['Normal']))
         story.append(Spacer(1, 8))
-        story.append(Paragraph('<link href="#district_deputies" color="blue">District Deputies</link>', self.pdf_styles['Normal']))
-        story.append(Spacer(1, 8))
         story.append(Paragraph('<link href="#program_directors" color="blue">Program Directors and Chairmen</link>', self.pdf_styles['Normal']))
+        story.append(Spacer(1, 8))
+        story.append(Paragraph('<link href="#district_deputies" color="blue">District Deputies</link>', self.pdf_styles['Normal']))
         story.append(Spacer(1, 8))
         story.append(Paragraph('<link href="#agents" color="blue">Insurance Agents</link>', self.pdf_styles['Normal']))
         story.append(PageBreak())
@@ -673,6 +673,19 @@ class KnightsDirectoryGenerator:
                 story.append(Spacer(1, 12))
             
             story.append(PageBreak())
+        
+        # Program Directors Section with anchor
+        p_directors = self._get_program_director_data()
+        if p_directors:
+            story.append(Paragraph('<a name="program_directors"/>Program Directors and Chairmen', self.pdf_styles['SectionHeader']))
+            story.append(Spacer(1, 5))
+
+            for director in p_directors:
+                print(f"Adding {director['role']}: {director['full_name']}")
+                story.append(self.create_pdf_programdirector_table(director))
+                story.append(Spacer(1, 12))
+
+        story.append(PageBreak())
         
         # District Deputies section with anchor
         dds = self._get_dd_data()
@@ -698,19 +711,6 @@ class KnightsDirectoryGenerator:
                 story.append(Spacer(1, 8))
             
             story.append(PageBreak())
-        
-        # Program Directors Section with anchor
-        p_directors = self._get_program_director_data()
-        if p_directors:
-            story.append(Paragraph('<a name="program_directors"/>Program Directors and Chairmen', self.pdf_styles['SectionHeader']))
-            story.append(Spacer(1, 5))
-
-            for director in p_directors:
-                print(f"Adding {director['role']}: {director['full_name']}")
-                story.append(self.create_pdf_programdirector_table(director))
-                story.append(Spacer(1, 12))
-
-        story.append(PageBreak())
 
         # Insurance Agents Section with anchor
         agents =self._get_agent_data()
