@@ -291,7 +291,7 @@ class KnightsDirectoryGenerator:
         
         # Portrait-friendly column widths
         # SUM MUST REMAIN <= 7.5
-        table = Table(data, colWidths=[0.5*inch, 1.5*inch, 0.5*inch, 2.75*inch, 2.75*inch])
+        table = Table(data, colWidths=[0.6*inch, 1.5*inch, 0.4*inch, 2.75*inch, 2.75*inch])
         
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
